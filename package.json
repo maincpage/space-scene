@@ -1,0 +1,16 @@
+{
+  "name": "spatial-scene",
+  "version": "1.0.0",
+  "private": true,
+  "description": "使用透明 PNG 图层制作交互式空间场景",
+  "scripts": {
+    "build": "node build.cjs",
+    "prestart": "node build.cjs",
+    "start": "node server.cjs",
+    "test": "node --test tests/*.test.cjs",
+    "check": "node --check app.js && node --check app-main.js && node --check build.cjs && node --check scene-math.js && node --check image-files.js && node --check example.js && node --check server.cjs && node --check project-store.cjs && node --check mesh-math.js && node --check layer-mask.js && node --check layer-clip.js && node --check mesh-renderer.js && node --check layer-editor.js && node --check scene-package.js && node --check scene-export.js && node --check export-player.js && node --check scene-background.js && node --check scene-assets.js && node --check scene-tilt.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

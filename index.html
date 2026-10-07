@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#18191b">
+  <meta name="description" content="导入分层 PNG，调整前后顺序和深度，预览空间视差。">
+  <title>空间场景</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="scene-math.js"></script>
+  <script defer src="image-files.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 10 5-10 5L2 8Z M2 12l10 5 10-5 M2 16l10 5 10-5"/></symbol>
+    <symbol id="i-cursor" viewBox="0 0 24 24"><path d="m5 3 14 10-7 1-3 7Z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7Z"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="3"/><path d="M11 18h2 M3 7l-2 5 2 5 M21 7l2 5-2 5"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 10a9 9 0 1 1 1 8 M3 4v6h6"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3H3v5 M16 3h5v5 M21 16v5h-5 M8 21H3v-5"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V3 m-5 5 5-5 5 5 M4 16v5h16v-5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v13 m-5-5 5 5 5-5 M4 17v4h16v-4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  </defs></svg>
+
+  <header class="app-header">
+    <div class="brand"><span class="brand-mark"><svg><use href="#i-layers"/></svg></span><h1>空间场景</h1><span class="brand-caption">SCENE STUDIO</span></div>
+    <div class="header-actions">
+      <button class="standard-button mobile-project-toggle" id="projectToggle" aria-expanded="false">项目</button>
+      <button class="standard-button" data-import="images"><svg><use href="#i-upload"/></svg>导入图片</button>
+      <button class="standard-button" data-import="folder">导入文件夹</button>
+      <button class="primary-button" id="openExport" data-needs-scene disabled><svg><use href="#i-download"/></svg>导出</button>
+    </div>
+  </header>
+  <main class="workspace">
+    <aside class="projects-panel" aria-label="项目">
+      <div class="section-title"><h2>项目</h2><button id="refreshProjects" class="text-button">刷新</button></div>
+      <button id="guestMode" class="project-item active" aria-pressed="true"><strong>游客模式</strong><span>本次使用 · 不保存图片</span></button>
+      <div id="projectList" class="project-list" aria-label="已有项目"></div>
+      <form id="newProjectForm" class="new-project-form">
+        <label for="projectName">新建项目</label>
+        <input id="projectName" type="text" maxlength="80" placeholder="输入项目名称" autocomplete="off" required>
+        <button id="createProject" class="standard-button" type="submit" disabled>创建项目</button>
+      </form>
+      <p id="projectStatus" class="muted note" role="status">正在读取项目…</p>
+      <details class="project-location"><summary>存储位置</summary><span id="projectRoot">程序目录 / 图</span></details>
+    </aside>
+    <section class="viewer-section" aria-label="预览">
+      <div class="scene-heading"><div class="scene-name"><h2 id="sceneTitle">游客模式</h2><span class="mode-note" id="modeNote">临时</span></div><span id="sceneMeta" class="muted">未导入图片</span><button id="clearScene" class="text-button" data-needs-scene disabled>清空预览</button></div>
+      <div class="viewer" id="viewer">
+        <div class="stage-status" id="stageStatus">未导入图片</div>
+        <button class="finish-edit-button" id="finishEdit" hidden>完成编辑</button>
+        <div id="editViewTools" class="edit-view-tools" role="group" aria-label="编辑视图" hidden><button id="panTool" aria-label="抓手拖动画布" aria-pressed="false" title="抓手；也可按住空格或中键拖动">抓手</button><span class="tool-divider"></span><button id="zoomOut" aria-label="缩小画布">−</button><output id="editZoom" aria-label="画布缩放">100%</output><button id="zoomIn" aria-label="放大画布">+</button><button id="fitView">适应</button><button id="focusLayer">定位图层</button></div>
+        <button class="icon-button fullscreen-button" id="fullscreen" title="全屏" aria-label="全屏" data-needs-scene disabled><svg><use href="#i-expand"/></svg></button>
+        <div class="stage" id="stage" tabindex="-1" role="group" aria-label="图片预览，移动鼠标或拖动查看，可使用方向键">
+          <div class="art-frame" id="artFrame" hidden><div class="scene-plane" id="scenePlane"></div><canvas id="meshCanvas" class="mesh-canvas" aria-label="网格变形预览" hidden></canvas><img class="overview-image" id="overviewImage" alt="00.png 整图" hidden><canvas id="editOverlay" class="edit-overlay" tabindex="0" aria-label="编辑画布：点击添加钉点，拖动移动；方向键微调选中钉点，Delete 删除，Escape 完成编辑" hidden></canvas></div>
+          <div class="empty-state" id="emptyState">
+            <svg><use href="#i-layers"/></svg>
+            <h2>让画面有一点空间</h2>
+            <p>拖入分层 PNG，或一张已导出的场景 PNG</p>
+            <button class="primary-button" data-import="images">选择 PNG 文件</button>
+            <span>00 整图 · 01 起为图层 · 画布尺寸保持一致</span>
+          </div>
+          <div class="loading" id="loading" role="status" hidden><span class="spinner"></span><span id="loadingText">正在读取图片…</span></div>
+        </div>
+        <div class="viewer-bottom"><span id="interactionHint">支持选择文件、文件夹或拖入图片</span><span class="view-coordinates" id="coordinates"></span></div>
+        <div class="drop-overlay" id="dropOverlay" hidden>松开鼠标，导入图片</div>
+      </div>
+      <div class="viewer-toolbar">
+        <div class="segmented" role="group" aria-label="交互方式">
+          <button data-mode="pointer" class="active" aria-pressed="true" data-needs-scene disabled>鼠标 / 拖动</button>
+          <button data-mode="auto" aria-pressed="false" data-needs-scene disabled>自动播放</button>
+        </div>
+        <div class="viewer-actions"><button class="text-button" id="compare" aria-pressed="false" data-needs-scene disabled><svg><use href="#i-eye"/></svg><span>整图对比</span></button><button class="text-button" id="recenter" data-needs-scene disabled>回正</button></div>
+      </div>
+    </section>
+    <aside class="controls" aria-label="设置">
+      <section class="control-section effect-section">
+        <div class="section-title"><h2>视差</h2><button id="spatialToggle" class="switch" role="switch" aria-label="开启视差" aria-checked="true" data-needs-scene disabled><span></span></button></div>
+        <div class="range-label"><label for="strength">强度</label><output id="strengthValue" for="strength">60%</output></div>
+        <input id="strength" type="range" min="0" max="100" value="60" data-needs-scene disabled>
+        <div class="sensor-line"><button class="text-button sensor-button" id="sensor" aria-pressed="false" aria-describedby="sensorHint" data-needs-scene disabled><svg><use href="#i-phone"/></svg><span>开启倾斜感应</span></button><span class="muted note" id="sensorHint" role="status"></span></div>
+        <div class="background-setting"><span class="muted small">背景</span><div class="background-options" role="group" aria-label="场景背景"><button data-background="black" aria-pressed="true" data-needs-scene disabled><span class="color-swatch black"></span>黑底</button><button data-background="white" aria-pressed="false" data-needs-scene disabled><span class="color-swatch white"></span>白底</button><button id="uploadBackground" aria-pressed="false" data-needs-scene disabled>上传底图</button></div></div>
+      </section>
+      <div class="inspector-tabs" role="tablist" aria-label="设置面板"><button id="layersTab" role="tab" aria-controls="layersPanel" aria-selected="true">图层</button><button id="deformTab" role="tab" aria-controls="deformSection" aria-selected="false" tabindex="-1">钉子与变形</button><button id="maskTab" role="tab" aria-controls="maskSection" aria-selected="false" tabindex="-1">蒙版</button></div>
+      <section class="control-section layer-section inspector-panel" id="layersPanel" role="tabpanel" aria-labelledby="layersTab">
+        <div class="section-title"><h2>图层 <span class="count" id="layerCount">0</span></h2><span class="muted small">后 → 前</span></div>
+        <div class="thumbnail-setting"><label for="thumbnailBounds">缩略图</label><select id="thumbnailBounds"><option value="layer">图层边界</option><option value="document">文档边界</option></select></div>
+        <div class="layer-list" id="layerList"><p class="muted note">导入后显示图层。</p></div>
+        <p class="muted note" id="layerOrderHint">01 为底层，数字越大层级越高。深度越大，位移越大。</p>
+        <p class="muted note">剪贴至：让本层始终只显示在目标层的透明轮廓内。目标隐藏后仍可用于裁切，图层顺序保持不变。</p>
+      </section>
+      <section class="control-section deform-section inspector-panel" id="deformSection" role="tabpanel" aria-labelledby="deformTab" hidden>
+        <p id="rendererStatus" class="muted note">选择图层后可编辑。</p>
+        <div id="deformControls" hidden>
+          <div class="selected-layer"><label class="editor-label" for="editLayer">当前图层</label><select id="editLayer" aria-label="选择要编辑的图层"></select></div>
+          <button id="editMesh" class="standard-button edit-mesh-button" aria-pressed="false">编辑钉子 / 起伏</button>
+          <p id="editHint" class="muted note"></p>
+          <div class="edit-tools" role="group" aria-label="编辑工具">
+            <button data-edit-tool="pin" aria-pressed="false">钉子</button><button data-edit-tool="raise" aria-pressed="false">凸起</button><button data-edit-tool="lower" aria-pressed="false">凹陷</button><button data-edit-tool="erase" aria-pressed="false">擦平</button>
+          </div>
+          <div class="editor-checks"><label><input id="soloLayer" type="checkbox" checked>仅看选中层</label><label><input id="showMesh" type="checkbox" checked>显示网格</label></div>
+          <div id="brushControls"><div class="range-label"><label for="brushSize">画笔大小</label><output id="brushSizeValue">22%</output></div><input id="brushSize" type="range" min="10" max="45" value="22"></div>
+          <div id="pinControls">
+          <div class="section-title pin-heading"><span>钉点</span><span id="pinTotal" class="muted small">0 / 12</span></div>
+          <div id="pinList" class="pin-list" aria-label="当前图层钉点"></div>
+          <div class="editor-actions"><button id="removePin" class="text-button">删除选中钉点</button><button id="clearPins" class="text-button">清空钉点</button></div>
+          <div class="range-label"><label for="pinRadius">固定范围</label><output id="pinRadiusValue">22%</output></div><input id="pinRadius" type="range" min="10" max="60" value="22">
+          </div>
+          <div class="deform-presets" role="group" aria-label="变形预设"><button data-deform-preset="volume">立体</button><button data-deform-preset="soft">柔软</button><button data-deform-preset="flat">平面</button></div>
+          <div class="range-label"><label for="volume">立体起伏</label><output id="volumeValue">0%</output></div><input id="volume" type="range" min="0" max="100" value="0">
+          <div class="range-label"><label for="bend">柔软弯曲</label><output id="bendValue">0%</output></div><input id="bend" type="range" min="0" max="100" value="0">
+          <div class="editor-actions"><button id="undoDeform" class="text-button">撤销编辑</button><button id="resetDeform" class="text-button">重置本层变形</button></div>
+        </div>
+      </section>
+      <section class="control-section mask-section inspector-panel" id="maskSection" role="tabpanel" aria-labelledby="maskTab" hidden>
+        <p id="maskEmpty" class="muted note">导入图片后可编辑图层蒙版。</p>
+        <div id="maskControls" hidden>
+          <div class="selected-layer"><label class="editor-label" for="maskLayer">当前图层</label><select id="maskLayer" aria-label="选择蒙版图层"></select></div>
+          <button id="importMaskImage" class="standard-button edit-mesh-button">导入蒙版图片</button>
+          <p class="muted note mask-import-hint">PNG / JPG / WebP，彩色自动转灰度；白显示、黑隐藏，透明处隐藏。按完整画布适配，替换本层蒙版，可撤销。</p>
+          <div class="mask-preview-row"><canvas id="maskPreview" width="112" height="80" aria-label="蒙版缩略图：白色显示，黑色隐藏"></canvas><div><strong id="maskStatus">尚未添加蒙版</strong><p class="muted note">白色显示 · 黑色隐藏<br>仅影响当前图层</p></div></div>
+          <button id="editMask" class="standard-button edit-mesh-button" aria-pressed="false">添加并编辑蒙版</button>
+          <div class="edit-tools" role="group" aria-label="蒙版画笔"><button data-mask-tool="hide" aria-pressed="false">隐藏</button><button data-mask-tool="reveal" aria-pressed="false">恢复</button></div>
+          <div class="editor-checks"><label><input id="maskSolo" type="checkbox">仅看选中层</label><label><input id="maskEnabled" type="checkbox" checked>启用蒙版</label></div>
+          <div class="range-label"><label for="maskSize">画笔大小</label><output id="maskSizeValue">12%</output></div><input id="maskSize" type="range" min="1" max="100" value="12">
+          <div class="range-label"><label for="maskHardness">边缘硬度</label><output id="maskHardnessValue">70%</output></div><input id="maskHardness" type="range" min="0" max="100" value="70">
+          <div class="range-label"><label for="maskOpacity">画笔不透明度</label><output id="maskOpacityValue">100%</output></div><input id="maskOpacity" type="range" min="1" max="100" value="100">
+          <div class="edit-tools" role="group" aria-label="蒙版操作"><button id="maskRevealAll">全部显示</button><button id="maskHideAll">全部隐藏</button><button id="maskInvert">反相</button></div>
+          <div class="editor-actions"><button id="undoMask" class="text-button">撤销蒙版</button><button id="removeMask" class="text-button">删除蒙版</button></div>
+          <p class="muted note">拖动画笔涂抹，隐藏区域露出下层。按 X 切换隐藏 / 恢复，Ctrl / ⌘ Z 撤销。可用滚轮缩放、空格拖动画布。</p>
+        </div>
+      </section>
+      <section class="control-section inspector-footer">
+        <div class="config-actions"><button id="exportConfig" class="text-button" data-needs-scene disabled>导出参数</button><button id="importConfig" class="text-button" data-needs-scene disabled>载入参数</button><button id="reset" class="text-button" data-needs-scene disabled>重置</button></div>
+        <p id="saveStatus" class="muted note">参数已自动保存</p>
+      </section>
+    </aside>
+  </main>
+  <input id="imageInput" type="file" accept="image/png,.png" multiple hidden>
+  <input id="folderInput" type="file" accept="image/png,.png" webkitdirectory multiple hidden>
+  <input id="configInput" type="file" accept="application/json,.json" hidden>
+  <input id="backgroundInput" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" hidden>
+  <input id="maskImageInput" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" hidden>
+  <dialog id="exportDialog" class="export-dialog">
+    <div class="dialog-heading"><div><span class="eyebrow">EXPORT</span><h2>带走这个场景</h2></div><button id="closeExport" class="icon-button" aria-label="关闭导出">×</button></div>
+    <button id="exportHTML" class="export-option"><span class="format-icon">HTML</span><span><strong>互动场景</strong><small>一个文件，浏览器打开即可互动，无需联网。</small></span><span class="option-arrow">↗</span></button>
+    <button id="exportScenePNG" class="export-option"><span class="format-icon">PNG+</span><span><strong>场景图片</strong><small>图层与效果装进 PNG，导回本工具继续使用。</small></span><span class="option-arrow">↗</span></button>
+    <button id="exportPNG" class="export-option"><span class="format-icon">PNG</span><span><strong>静态图片</strong><small>保存当前视角，不含编辑网格与钉点标记。</small></span><span class="option-arrow">↗</span></button>
+    <p class="export-note">场景 PNG 在普通看图软件中显示静态图；传送时请发送原文件。</p>
+    <p id="exportStatus" class="export-status" role="status"></p>
+  </dialog>
+  <dialog id="replaceDialog" class="replace-dialog">
+    <h2>替换项目图片</h2><p id="replaceMessage"></p>
+    <div class="dialog-actions"><button id="cancelReplace" class="standard-button">取消</button><button id="confirmReplace" class="primary-button">替换并保存</button></div>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <noscript>请开启 JavaScript。</noscript>
+</body>
+</html>
